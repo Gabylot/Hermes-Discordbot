@@ -1,0 +1,16 @@
+{
+  "name": "veli-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Veli production, MPF, facility and delivery tickets",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5"
+  }
+}
