@@ -1,174 +1,262 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+  SeparatorBuilder,
+  MessageFlags,
+} from 'discord.js';
 
 const IMAGE_BASE = (process.env.API_BASE_URL || '').replace(/\/api\/?$/, '') || 'https://veli.team';
 
-// ── Production / Ticket Embed ────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  open:      { emoji: '🟢', color: 0x2ecc71, label: 'Open'      },
+  assigned:  { emoji: '🟡', color: 0xf39c12, label: 'Assigned'  },
+  done:      { emoji: '✅', color: 0x27ae60, label: 'Done'       },
+  cancelled: { emoji: '🔴', color: 0xe74c3c, label: 'Cancelled' },
+};
+
+function statusCfg(status) {
+  return STATUS_CONFIG[status] ?? { emoji: '⚪', color: 0x95a5a6, label: status ?? 'Unknown' };
+}
+
+function itemImageUrl(image) {
+  return image ? `${IMAGE_BASE}/images/item/${image}` : null;
+}
+
+// ── Production / Ticket Embed ─────────────────────────────────────────────────
+// (stays as a classic embed — no per-item images needed here)
 
 export function buildProductionEmbed(ticket) {
-  const statusEmoji = ticket.status === 'open' ? '🟢' : '🟡';
+  const cfg = statusCfg(ticket.status);
+
   const claimedBy = ticket.discord_user_id
     ? `<@${ticket.discord_user_id}>`
-    : (ticket.assigned_to || 'Unknown');
-  const statusLabel = ticket.status === 'open' ? 'Open' : `Claimed by ${claimedBy}`;
+    : (ticket.assigned_to || 'Unassigned');
+
+  const statusValue = ticket.status === 'open' ? cfg.label : `${cfg.label} — ${claimedBy}`;
 
   const embed = new EmbedBuilder()
-    .setTitle(`${statusEmoji} ${ticket.title || 'Production Ticket #' + ticket.ticket_id}`)
-    .setDescription(ticket.description || 'No description')
-    .setColor(ticket.status === 'open' ? 0x2ecc71 : 0xf39c12)
+    .setTitle(`${cfg.emoji} ${ticket.title || `Production Ticket #${ticket.ticket_id}`}`)
+    .setDescription(ticket.description || '*No description provided.*')
+    .setColor(cfg.color)
+    .setTimestamp()
     .addFields(
-      { name: 'Status', value: statusLabel, inline: true },
-      { name: 'Type', value: ticket.ticket_type || 'Unknown', inline: true },
+      { name: '📋 Status',  value: statusValue,                 inline: true },
+      { name: '🏷️ Type',    value: ticket.ticket_type || 'N/A', inline: true },
     );
 
   if (ticket.has_cost) {
     embed.addFields(
-      { name: 'Total Cost', value: ticket.total_cost, inline: true },
-      { name: 'Total Crates', value: ticket.total_crates, inline: true },
+      { name: '💰 Total Cost',   value: String(ticket.total_cost),   inline: true },
+      { name: '📦 Total Crates', value: String(ticket.total_crates), inline: true },
     );
   }
 
-  if (ticket.items && ticket.items.length > 0) {
+  if (ticket.items?.length > 0) {
     const itemList = ticket.items
-      .map(i => `• **${i.name}** × ${i.quantity_needed}`)
+      .map(i => `\`${String(i.quantity_needed).padStart(3)}\` × **${i.name}**`)
       .join('\n');
 
-    embed.addFields({ name: `Items (${ticket.items.length})`, value: itemList.slice(0, 1024) });
+    embed.addFields({
+      name: `📦 Items (${ticket.items.length})`,
+      value: itemList.slice(0, 1024),
+    });
   }
 
-  // Build action buttons
+  embed.setFooter({ text: `Ticket #${ticket.ticket_id}` });
+
   const rows = [];
 
   if (ticket.status === 'open') {
-    const claimRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`claim_ticket:${ticket.ticket_id}`)
-        .setLabel('Claim')
-        .setStyle(ButtonStyle.Primary),
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`claim_ticket:${ticket.ticket_id}`)
+          .setLabel('Claim Ticket')
+          .setEmoji('🙋')
+          .setStyle(ButtonStyle.Primary),
+      ),
     );
-    rows.push(claimRow);
   }
 
   if (ticket.status === 'assigned' && ticket.discord_user_id) {
-    const actionRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`done_ticket:${ticket.ticket_id}`)
-        .setLabel('Done')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`cancel_ticket:${ticket.ticket_id}`)
-        .setLabel('Cancel')
-        .setStyle(ButtonStyle.Danger),
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`done_ticket:${ticket.ticket_id}`)
+          .setLabel('Mark Done')
+          .setEmoji('✅')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`cancel_ticket:${ticket.ticket_id}`)
+          .setLabel('Cancel')
+          .setEmoji('🗑️')
+          .setStyle(ButtonStyle.Danger),
+      ),
     );
-    rows.push(actionRow);
   }
 
   return { embeds: [embed], components: rows };
 }
 
-// ── Delivery Request Embed (the persistent button in #delivery) ─────────────
+// ── Delivery Request Embed (persistent button in #delivery) ───────────────────
+// (no per-item images — stays as a classic embed)
 
 export function buildDeliveryRequestEmbed() {
   const embed = new EmbedBuilder()
     .setTitle('🚛 Request a Delivery')
     .setDescription(
-      'Click the button below to start a new delivery contract.\n' +
-      'A private thread will open where you can specify how many containers you can carry.'
+      'Need supplies moved to the frontline?\n\n' +
+      'Click **New Delivery** to open a private thread. ' +
+      "You'll be asked how many containers you can carry, " +
+      'and a contract will be generated for you.'
     )
-    .setColor(0x3498db);
+    .setColor(0x3498db)
+    .setFooter({ text: 'One contract per request — open a new thread for each run.' });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('delivery_request')
       .setLabel('New Delivery')
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('🚛'),
+      .setEmoji('🚛')
+      .setStyle(ButtonStyle.Primary),
   );
 
   return { embeds: [embed], components: [row] };
 }
 
-// ── Delivery Ticket Embed (the actual delivery contract posted in a thread) ─
+// ── Delivery Ticket — Components V2 ──────────────────────────────────────────
+//
+// Each item gets its own Section: quantity + name on the left, item image on
+// the right. Requires MessageFlags.IsComponentsV2 on the message.
+//
+// NOTE: Components V2 messages cannot use `content` or `embeds`. All layout
+// lives inside ContainerBuilder components.
 
 export function buildDeliveryTicketEmbed(contract, discordUserId) {
-  const embed = new EmbedBuilder()
-    .setTitle(`🚛 Delivery Contract #${contract.contract_id}`)
-    .setDescription(
-      `**Route:** ${contract.production_city} → ${contract.frontline_city}\n` +
-      `**Containers:** ${contract.container_count}`
-    )
-    .setColor(0xe67e22);
+  const totals   = contract.totals ?? {};
+  const hasItems = contract.items?.length > 0;
 
-  const totals = contract.totals || {};
+  // ── Load summary line ──
+  const loadParts = [];
+  if (totals.crates)  loadParts.push(`**${totals.crates}** crates`);
+  if (totals.special) loadParts.push(`**${totals.special}** vehicle/shippable`);
+  const loadSummary = loadParts.length ? loadParts.join(' · ') : 'Nothing allocated yet.';
 
-  if (totals.crates || totals.special) {
-    const parts = [];
-    if (totals.crates) parts.push(`${totals.crates} crates`);
-    if (totals.special) parts.push(`${totals.special} vehicle/shippable`);
-    embed.addFields({ name: 'Load Summary', value: parts.join(', '), inline: true });
-  }
+  // ── Build a single Container (gives the accent bar + grouped layout) ──
+  const container = new ContainerBuilder();
 
-  // Show item details with names and images
-  if (contract.items && contract.items.length > 0) {
-    const itemList = contract.items
-      .map(i => `• **${i.item_name || `Item #${i.item_id}`}** × ${i.allocated}`)
-      .join('\n');
-    embed.addFields({ name: `Items to Load (${contract.items.length})`, value: itemList.slice(0, 1024) });
-
-    // Set thumbnail to the first item's image
-    const firstImage = contract.items.find(i => i.image)?.image;
-    if (firstImage) {
-      embed.setThumbnail(`${IMAGE_BASE}/images/item/${firstImage}`);
-    }
-  } else if (contract.allocation && Object.keys(contract.allocation).length > 0) {
-    // Fallback: show allocation with IDs if items array is not available
-    const allocEntries = Object.entries(contract.allocation)
-      .filter(([, qty]) => qty > 0)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 10);
-
-    if (allocEntries.length > 0) {
-      const allocText = allocEntries
-        .map(([itemId, qty]) => `• Item #${itemId}: ${qty}`)
-        .join('\n');
-      embed.addFields({ name: 'Items to Load', value: allocText.slice(0, 1024) });
-    }
-  }
-
-  embed.setFooter({ text: `Assigned to <@${discordUserId}>` });
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`done_delivery:${contract.contract_id}`)
-      .setLabel('Done')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`cancel_delivery:${contract.contract_id}`)
-      .setLabel('Cancel')
-      .setStyle(ButtonStyle.Danger),
+  // Header block
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      `## 🚛 Delivery Contract #${contract.contract_id}\n` +
+      `**Route:** ${contract.production_city} → ${contract.frontline_city}  ·  ` +
+      `**Containers:** ${contract.container_count}\n` +
+      `**Load:** ${loadSummary}\n` +
+      `Assigned to <@${discordUserId}>`
+    ),
   );
 
-  return { embeds: [embed], components: [row] };
+  // ── Item sections (one per item, thumbnail on the right) ──
+  if (hasItems) {
+    container.addSeparatorComponents(new SeparatorBuilder());
+
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`### 🗃️ Items to Load (${contract.items.length})`),
+    );
+
+    for (const item of contract.items) {
+      const name     = item.item_name || `Item #${item.item_id}`;
+      const qty      = String(item.allocated).padStart(3);
+      const imageUrl = itemImageUrl(item.image);
+
+      const section = new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`\`${qty}\` × **${name}**`),
+        );
+
+      if (imageUrl) {
+        section.setThumbnailAccessory(
+          new ThumbnailBuilder()
+            .setURL(imageUrl)
+            .setDescription(name),
+        );
+      }
+
+      container.addSectionComponents(section);
+    }
+  } else if (Object.keys(contract.allocation ?? {}).length > 0) {
+    // Fallback when items aren't populated — no images available
+    container.addSeparatorComponents(new SeparatorBuilder());
+
+    const allocLines = Object.entries(contract.allocation)
+      .filter(([, qty]) => qty > 0)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([id, qty]) => `\`${String(qty).padStart(3)}\` × Item #${id}`)
+      .join('\n');
+
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`### 🗃️ Items to Load\n${allocLines}`),
+    );
+  }
+
+  // ── Action buttons ──
+  container.addSeparatorComponents(new SeparatorBuilder());
+
+  container.addActionRowComponents(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`done_delivery:${contract.contract_id}`)
+        .setLabel('Delivery Done')
+        .setEmoji('✅')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`cancel_delivery:${contract.contract_id}`)
+        .setLabel('Cancel')
+        .setEmoji('🗑️')
+        .setStyle(ButtonStyle.Danger),
+    ),
+  );
+
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+  };
 }
 
-// ── Leaderboard Embed ───────────────────────────────────────────────────────
+// ── Leaderboard Embed ─────────────────────────────────────────────────────────
+
+const MEDALS = ['🥇', '🥈', '🥉'];
 
 export function buildLeaderboardEmbed(players) {
   const embed = new EmbedBuilder()
     .setTitle('🏆 Leaderboard')
-    .setColor(0xf1c40f);
+    .setColor(0xf1c40f)
+    .setTimestamp();
 
-  if (!players || players.length === 0) {
-    embed.setDescription('No deliveries or tickets completed yet.');
+  if (!players?.length) {
+    embed.setDescription('No deliveries or tickets completed yet.\nBe the first on the board!');
     return { embeds: [embed] };
   }
 
   const lines = players.map((p, i) => {
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
-    const name = p.displayName || `<@${p.discord_user_id}>`;
-    return `${medal} **${name}** — **${p.score}** pts (${p.deliveries} deliveries, ${p.tickets} tickets)`;
+    const rank  = MEDALS[i] ?? `**#${i + 1}**`;
+    const name  = p.displayName || `<@${p.discord_user_id}>`;
+    const score = `**${p.score}** pts`;
+    const stats = `${p.deliveries} 🚛 · ${p.tickets} 🎫`;
+    return `${rank} ${name} — ${score}  *(${stats})*`;
   });
 
   embed.setDescription(lines.join('\n'));
+  embed.setFooter({ text: `${players.length} players ranked` });
 
   return { embeds: [embed] };
 }
