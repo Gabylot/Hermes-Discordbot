@@ -1,7 +1,5 @@
-import { cancelTicket, regenerateTickets } from '../utils/api.js';
-import { syncTickets, cleanChannel } from '../utils/ticketPoster.js';
-
-const CHANNEL_TYPES = ['mpf', 'factory', 'resources', 'vehicles_structures'];
+import { cancelTicket } from '../utils/api.js';
+import { buildProductionEmbed } from '../embeds/index.js';
 
 export default {
   customId: 'cancel_ticket',
@@ -9,13 +7,14 @@ export default {
     await interaction.deferUpdate();
 
     const ticketId = interaction.customId.split(':')[1];
-    const userId = interaction.user.id;
-    const client = interaction.client;
+    const userId   = interaction.user.id;
+    const client   = interaction.client;
 
     try {
-      await cancelTicket(ticketId, userId);
+      // Backend re-evaluates priority and returns whichever ticket
+      // should now be shown — may be the cancelled one or a promoted queued one
+      const shown = await cancelTicket(ticketId, userId);
 
-      // Log to admin channel
       const adminChannel = client.channels.cache.get(process.env.CHANNEL_ADMIN_LOG);
       if (adminChannel) {
         await adminChannel.send(
@@ -23,29 +22,57 @@ export default {
         );
       }
 
-      // Delete the thread (it's no longer needed since the ticket went back to open)
-      if (interaction.channel.type === 11 || interaction.channel.type === 12) { // public/private thread
-        await interaction.channel.delete();
-      }
+      const embed = buildProductionEmbed(shown);
 
-      // Regenerate and re-sync tickets
-      try {
-        await regenerateTickets();
-        console.log(`[cancel] tickets regenerated after cancelling ticket #${ticketId}`);
-      } catch (err) {
-        console.error(`[cancel] failed to regenerate tickets:`, err.message);
-      }
+      // The cancel button is in the thread — edit the thread message
+      await interaction.message.edit(embed);
 
-      for (const type of CHANNEL_TYPES) {
+      // Also update the parent channel so the cancelled ticket gets its
+      // claim button back. Find the specific message by ticket ID in the
+      // embed footer ("Ticket #123"), or post a new one if not found.
+      const parentChannel = interaction.channel.parent;
+      if (parentChannel) {
         try {
-          await cleanChannel(client, type);
-          await syncTickets(client, type);
+          const messages = await parentChannel.messages.fetch({ limit: 50 });
+          const original = messages.find(
+            m => m.author.id === client.user.id &&
+                 m.embeds.length > 0 &&
+                 m.embeds[0]?.footer?.text === `Ticket #${ticketId}`
+          );
+          if (original) {
+            await original.edit(embed);
+            console.log(`[cancel] updated parent message for ticket #${ticketId}`);
+          } else {
+            // Message for this ticket not found — try to reuse a placeholder
+            const placeholder = messages.find(
+              m => m.author.id === client.user.id &&
+                   m.embeds.length > 0 &&
+                   m.embeds[0]?.footer?.text === 'Ticket #0'
+            );
+            if (placeholder) {
+              await placeholder.edit(embed);
+              console.log(`[cancel] reused placeholder for ticket #${shown.ticket_id}`);
+            } else {
+              // No placeholder either — post a new one
+              await parentChannel.send(embed);
+              console.log(`[cancel] posted new message for ticket #${shown.ticket_id} in parent channel`);
+            }
+          }
         } catch (err) {
-          console.error(`[cancel] failed to re-sync ${type}:`, err.message);
+          console.error(`[cancel] failed to update parent channel message:`, err.message);
         }
       }
 
-      console.log(`[cancel] ticket #${ticketId} cancelled by ${userId}`);
+      // Delete the thread
+      try {
+        if (interaction.channel.type === 11 || interaction.channel.type === 12) {
+          await interaction.channel.delete();
+        }
+      } catch {
+        // Thread deletion failed — non-critical
+      }
+
+      console.log(`[cancel] ticket #${ticketId} cancelled, now showing #${shown.ticket_id}`);
     } catch (err) {
       console.error(`[button] cancel_ticket error:`, err);
       await interaction.followUp({ content: '❌ Could not cancel this ticket.', ephemeral: true });

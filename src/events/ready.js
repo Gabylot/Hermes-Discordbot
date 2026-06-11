@@ -1,4 +1,4 @@
-import { syncTickets, syncLeaderboard, postDeliveryRequestButton, cleanChannel } from '../utils/ticketPoster.js';
+import { syncTickets, syncLeaderboard, postDeliveryRequestButton } from '../utils/ticketPoster.js';
 
 const TICKET_TYPES = ['mpf', 'factory', 'resources', 'vehicles_structures'];
 
@@ -9,9 +9,8 @@ export default {
     console.log(`[bot] logged in as ${client.user.tag}`);
     client.user.setActivity('Veli Logistics', { type: 3 }); // Watching
 
-    // Clean existing bot messages in ticket channels, then post fresh tickets
+    // Sync tickets — edits existing messages, posts new ones only when needed
     for (const type of TICKET_TYPES) {
-      await cleanChannel(client, type);
       await syncTickets(client, type);
     }
 

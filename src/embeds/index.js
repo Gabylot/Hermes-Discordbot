@@ -165,6 +165,11 @@ export function buildDeliveryTicketEmbed(contract, discordUserId) {
   );
 
   // ── Item sections (one per item, thumbnail on the right) ──
+  // NOTE: Discord Components V2 limits total component objects to 40.
+  // Each Section counts as 1 component (plus accessories like Thumbnail).
+  // We cap individually-rendered sections to avoid the limit.
+  const MAX_SECTION_ITEMS = 10;
+
   if (hasItems) {
     container.addSeparatorComponents(new SeparatorBuilder());
 
@@ -172,7 +177,9 @@ export function buildDeliveryTicketEmbed(contract, discordUserId) {
       new TextDisplayBuilder().setContent(`### 🗃️ Items to Load (${contract.items.length})`),
     );
 
-    for (const item of contract.items) {
+    const itemsToShow = contract.items.slice(0, MAX_SECTION_ITEMS);
+
+    for (const item of itemsToShow) {
       const name     = item.item_name || `Item #${item.item_id}`;
       const qty      = String(item.allocated).padStart(3);
       const imageUrl = itemImageUrl(item.image);
@@ -191,6 +198,20 @@ export function buildDeliveryTicketEmbed(contract, discordUserId) {
       }
 
       container.addSectionComponents(section);
+    }
+
+    // Show remaining items as compact text to avoid hitting the 40-component limit
+    const overflowCount = contract.items.length - MAX_SECTION_ITEMS;
+    if (overflowCount > 0) {
+      const overflowItems = contract.items.slice(MAX_SECTION_ITEMS);
+      const overflowText = overflowItems
+        .map(i => `\`${String(i.allocated).padStart(3)}\` × **${i.item_name || `Item #${i.item_id}`}**`)
+        .join('\n');
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          `### … and ${overflowCount} more item type${overflowCount > 1 ? 's' : ''}\n${overflowText}`
+        ),
+      );
     }
   } else if (Object.keys(contract.allocation ?? {}).length > 0) {
     // Fallback when items aren't populated — no images available

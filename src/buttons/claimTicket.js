@@ -1,8 +1,5 @@
-import { getClaimTicket, regenerateTickets } from '../utils/api.js';
+import { getClaimTicket, promoteTicket, setTicketMessage } from '../utils/api.js';
 import { buildProductionEmbed } from '../embeds/index.js';
-import { syncTickets, cleanChannel } from '../utils/ticketPoster.js';
-
-const CHANNEL_TYPES = ['mpf', 'factory', 'resources', 'vehicles_structures'];
 
 export default {
   customId: 'claim_ticket',
@@ -10,16 +7,19 @@ export default {
     await interaction.deferUpdate();
 
     const ticketId = interaction.customId.split(':')[1];
-    const userId = interaction.user.id;
-    const client = interaction.client;
+    const userId   = interaction.user.id;
+    const client   = interaction.client;
+
+    const CHANNEL_TYPE_MAP = {
+      [process.env.CHANNEL_MPF]:                 'mpf',
+      [process.env.CHANNEL_FACTORY]:             'factory',
+      [process.env.CHANNEL_RESOURCES]:           'resources',
+      [process.env.CHANNEL_VEHICLES_STRUCTURES]: 'vehicles_structures',
+    };
 
     try {
       const ticket = await getClaimTicket(ticketId, userId);
 
-      // Delete the original message from the ticket channel
-      await interaction.message.delete();
-
-      // Log to admin channel
       const adminChannel = client.channels.cache.get(process.env.CHANNEL_ADMIN_LOG);
       if (adminChannel) {
         await adminChannel.send(
@@ -27,38 +27,61 @@ export default {
         );
       }
 
-      // Open a private thread for the claimed ticket
-      const channel = interaction.channel;
-      const thread = await channel.threads.create({
+      // Open private thread for the claimer
+      const thread = await interaction.channel.threads.create({
         name: `Ticket #${ticketId} — ${ticket.title || 'Claimed'}`,
-        autoArchiveDuration: 1440, // 24 hours
-        reason: `Claimed by <@${userId}>`,
+        autoArchiveDuration: 1440,
+        reason: `Claimed by ${userId}`,
       });
       await thread.members.add(userId);
+      await thread.send(buildProductionEmbed(ticket));
 
-      // Post the claimed ticket embed in the thread (with Done button)
-      const payload = buildProductionEmbed(ticket);
-      await thread.send(payload);
-
-      console.log(`[claim] ticket #${ticketId} claimed by ${userId}, thread created: ${thread.id}`);
-
-      // Regenerate tickets to replace the claimed one
+      // Delete the system notification message Discord auto-creates
+      // when a thread is started from a message — it's noisy and unnecessary.
+      // System messages are type 21 (ThreadCreated) or have system === true.
       try {
-        await regenerateTickets();
-        console.log(`[claim] tickets regenerated after claim #${ticketId}`);
-      } catch (err) {
-        console.error(`[claim] failed to regenerate tickets:`, err.message);
+        const recentMessages = await interaction.channel.messages.fetch({ limit: 10 });
+        const systemMsg = recentMessages.find(
+          m => m.system || m.type === 21 || m.type === 18 || m.type === 19 || m.type === 20
+        );
+        if (systemMsg) {
+          await systemMsg.delete();
+        }
+      } catch {
+        // Non-critical — system message deletion may fail with permissions
       }
 
-      // Clean and re-sync all ticket channels
-      for (const type of CHANNEL_TYPES) {
+      // Promote the next queued ticket and edit this message with it
+      const type = CHANNEL_TYPE_MAP[interaction.channelId];
+      if (type) {
         try {
-          await cleanChannel(client, type);
-          await syncTickets(client, type);
+          const next = await promoteTicket(type);
+          await interaction.message.edit(buildProductionEmbed(next));
+          // Save the message ID for the promoted ticket
+          try {
+            await setTicketMessage(next.ticket_id, interaction.message.id);
+          } catch {
+            // Non-critical
+          }
+          console.log(`[claim] promoted ticket #${next.ticket_id} into message`);
         } catch (err) {
-          console.error(`[claim] failed to re-sync ${type}:`, err.message);
+          // No queued ticket available — show a "no tickets" message instead of
+          // leaving stale buttons on an empty embed
+          const noTicketsEmbed = buildProductionEmbed({
+            ticket_id: 0,
+            title: '📭 No Tickets Available',
+            description: 'All tickets have been claimed. New tickets will appear when generated.',
+            status: 'open',
+            ticket_type: type,
+            has_cost: false,
+            items: [],
+          });
+          await interaction.message.edit({ ...noTicketsEmbed, components: [] });
+          console.log(`[claim] no queued ticket available for ${type}`);
         }
       }
+
+      console.log(`[claim] ticket #${ticketId} claimed by ${userId}, thread: ${thread.id}`);
     } catch (err) {
       console.error(`[button] claim_ticket error:`, err);
       await interaction.followUp({ content: '❌ Could not claim this ticket.', ephemeral: true });

@@ -38,6 +38,16 @@ export async function completeTicket(ticketId, discordUserId) {
   return data;
 }
 
+export async function promoteTicket(type) {
+  const { data } = await api.post(`/bot/tickets/${type}/promote`);
+  return data;
+}
+
+export async function setTicketMessage(ticketId, discordMessageId) {
+  const { data } = await api.post(`/bot/tickets/${ticketId}/set-message`, { discord_message_id: discordMessageId });
+  return data;
+}
+
 // ── Delivery ─────────────────────────────────────────────────────────────────
 
 export async function getDeliveryPossible(options = {}) {

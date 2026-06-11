@@ -1,4 +1,4 @@
-import { getOpenTickets, getLeaderboard } from './api.js';
+import { getOpenTickets, getLeaderboard, setTicketMessage } from './api.js';
 import { buildProductionEmbed, buildLeaderboardEmbed, buildDeliveryRequestEmbed } from '../embeds/index.js';
 
 const CHANNEL_MAP = {
@@ -8,42 +8,14 @@ const CHANNEL_MAP = {
   vehicles_structures:  process.env.CHANNEL_VEHICLES_STRUCTURES,
 };
 
-/**
- * Delete all bot messages in a channel. Used before re-posting tickets
- * after regeneration so the channel stays clean.
- */
-export async function cleanChannel(client, type) {
-  const channelId = CHANNEL_MAP[type];
-  if (!channelId) return 0;
-
-  const channel = client.channels.cache.get(channelId);
-  if (!channel) return 0;
-
-  let deleted = 0;
-  let lastId;
-  while (true) {
-    const options = { limit: 100 };
-    if (lastId) options.before = lastId;
-
-    const messages = await channel.messages.fetch(options);
-    if (messages.size === 0) break;
-
-    const botMessages = messages.filter(m => m.author.id === client.user.id);
-    if (botMessages.size > 0) {
-      await channel.bulkDelete(botMessages);
-      deleted += botMessages.size;
-    }
-
-    lastId = messages.last()?.id;
-  }
-
-  return deleted;
-}
+// Cache of last known state per ticket type — used to skip unnecessary edits.
+// Key = type, value = JSON string of ticket IDs + statuses.
+const lastSyncState = new Map();
 
 /**
- * Post all open tickets for a given type into the right channel.
- * Call this on bot startup and/or on a polling interval.
- * Returns the number of tickets posted.
+ * Sync all open tickets for a given type into the right channel.
+ * Edits existing messages when possible, posts new ones only when needed.
+ * Messages for tickets that no longer exist are stripped of buttons.
  */
 export async function syncTickets(client, type) {
   const channelId = CHANNEL_MAP[type];
@@ -66,25 +38,129 @@ export async function syncTickets(client, type) {
     return 0;
   }
 
-  if (!Array.isArray(tickets) || tickets.length === 0) {
-    console.log(`[sync] ${type}: 0 open tickets — nothing to post`);
-    return 0;
-  }
+  if (!Array.isArray(tickets)) tickets = [];
 
   console.log(`[sync] ${type}: ${tickets.length} open ticket(s) found`);
 
+  // Build a map of ticket_id → ticket data
+  const ticketMap = new Map(tickets.map(t => [String(t.ticket_id), t]));
+
+  // Quick check: has anything changed since the last sync?
+  // Include items in the signature so item-only changes are detected.
+  const currentState = JSON.stringify(tickets.map(t =>
+    `${t.ticket_id}:${t.status}:${t.items?.map(i => `${i.item_id}:${i.quantity_needed}`).join(',')}`
+  ).sort());
+  const cachedState = lastSyncState.get(type);
+  if (cachedState === currentState) {
+    // Nothing changed — skip the entire sync for this type
+    return 0;
+  }
+  lastSyncState.set(type, currentState);
+
+  // Fetch existing bot messages in the channel (paginate to find them)
+  const existingMessages = new Map(); // discord_message_id → message
+  let lastId;
+  try {
+    while (true) {
+      const options = { limit: 100 };
+      if (lastId) options.before = lastId;
+
+      const messages = await channel.messages.fetch(options);
+      if (messages.size === 0) break;
+
+      for (const [, msg] of messages) {
+        if (msg.author.id === client.user.id && msg.embeds.length > 0) {
+          // Extract ticket_id from the footer text "Ticket #123"
+          const footerText = msg.embeds[0]?.footer?.text || '';
+          const match = footerText.match(/Ticket #(\d+)/);
+          if (match) {
+            existingMessages.set(String(match[1]), msg);
+          }
+        }
+      }
+
+      lastId = messages.last()?.id;
+    }
+  } catch (err) {
+    console.error(`[sync] ${type}: error fetching existing messages —`, err.message);
+  }
+
   let posted = 0;
+
+  // Update or post messages for each open ticket
   for (const ticket of tickets) {
+    const ticketId = String(ticket.ticket_id);
+    const existingMsg = existingMessages.get(ticketId);
+
     try {
       const payload = buildProductionEmbed(ticket);
-      await channel.send(payload);
+
+      if (existingMsg) {
+        // Edit existing message with updated embed
+        await existingMsg.edit(payload);
+      } else {
+        // Post new message
+        const newMsg = await channel.send(payload);
+        // Record the message ID back in the database
+        try {
+          await setTicketMessage(ticketId, newMsg.id);
+        } catch (err) {
+          console.error(`[sync] ${type}: failed to save message ID for ticket #${ticketId} —`, err.message);
+        }
+      }
       posted++;
     } catch (err) {
-      console.error(`[sync] ${type}: failed to post ticket #${ticket.ticket_id} —`, err.message);
+      console.error(`[sync] ${type}: failed to post/edit ticket #${ticketId} —`, err.message);
     }
   }
 
-  console.log(`[sync] ${type}: ${posted}/${tickets.length} ticket(s) posted`);
+  // Clean up messages that no longer correspond to open tickets.
+  // "No tickets available" placeholders (Ticket #0) are reused as slots
+  // for new tickets. Other stale messages get their buttons stripped.
+  let placeholderIdx = 0;
+  const placeholders = [];
+
+  for (const [ticketId, msg] of existingMessages) {
+    if (!ticketMap.has(ticketId)) {
+      if (ticketId === '0') {
+        placeholders.push(msg);
+      } else {
+        try {
+          await msg.edit({ components: [] });
+        } catch {
+          // Message may have been deleted by user, that's fine
+        }
+      }
+    }
+  }
+
+  // Use placeholder messages as slots for new tickets instead of posting extras
+  for (const placeholder of placeholders) {
+    if (placeholderIdx < tickets.length) {
+      const ticket = tickets[placeholderIdx];
+      try {
+        const payload = buildProductionEmbed(ticket);
+        await placeholder.edit(payload);
+        try {
+          await setTicketMessage(String(ticket.ticket_id), placeholder.id);
+        } catch {
+          // Non-critical
+        }
+      } catch (err) {
+        console.error(`[sync] ${type}: failed to edit placeholder for ticket #${ticket.ticket_id} —`, err.message);
+      }
+      placeholderIdx++;
+    } else {
+      // No more tickets — make placeholder read-only
+      try {
+        await placeholder.edit({ components: [] });
+      } catch {
+        // Non-critical
+      }
+    }
+  }
+
+  console.log(`[sync] ${type}: ${posted}/${tickets.length} ticket(s) synced`);
   return posted;
 }
 
