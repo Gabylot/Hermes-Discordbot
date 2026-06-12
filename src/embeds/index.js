@@ -4,9 +4,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
-  SectionBuilder,
   TextDisplayBuilder,
-  ThumbnailBuilder,
   SeparatorBuilder,
   MessageFlags,
 } from 'discord.js';
@@ -26,10 +24,6 @@ function statusCfg(status) {
   return STATUS_CONFIG[status] ?? { emoji: '⚪', color: 0x95a5a6, label: status ?? 'Unknown' };
 }
 
-function itemImageUrl(image) {
-  return image ? `${IMAGE_BASE}/images/item/${image}` : null;
-}
-
 // ── Production / Ticket Embed ─────────────────────────────────────────────────
 // (stays as a classic embed — no per-item images needed here)
 
@@ -44,24 +38,20 @@ export function buildProductionEmbed(ticket) {
 
   const embed = new EmbedBuilder()
     .setTitle(`${cfg.emoji} ${ticket.title || `Production Ticket #${ticket.ticket_id}`}`)
-    .setDescription(ticket.description || '*No description provided.*')
     .setColor(cfg.color)
     .setTimestamp()
     .addFields(
-      { name: '📋 Status',  value: statusValue,                 inline: true },
-      { name: '🏷️ Type',    value: ticket.ticket_type || 'N/A', inline: true },
-    );
-
-  if (ticket.has_cost) {
-    embed.addFields(
-      { name: '💰 Total Cost',   value: String(ticket.total_cost),   inline: true },
+      { name: '📋 Status',      value: statusValue,                 inline: true },
       { name: '📦 Total Crates', value: String(ticket.total_crates), inline: true },
     );
-  }
 
   if (ticket.items?.length > 0) {
     const itemList = ticket.items
-      .map(i => `\`${String(i.quantity_needed).padStart(3)}\` × **${i.name}**`)
+      .map(i => {
+        const crates = i.crates ?? 0;
+        const breakdown = i.crate_breakdown ? ` (${i.crate_breakdown})` : '';
+        return `\`${String(i.quantity_needed).padStart(3)}\` × **${i.name}** — 📦 ${crates} crate${crates !== 1 ? 's' : ''}${breakdown}`;
+      })
       .join('\n');
 
     embed.addFields({
@@ -134,8 +124,7 @@ export function buildDeliveryRequestEmbed() {
 
 // ── Delivery Ticket — Components V2 ──────────────────────────────────────────
 //
-// Each item gets its own Section: quantity + name on the left, item image on
-// the right. Requires MessageFlags.IsComponentsV2 on the message.
+// Requires MessageFlags.IsComponentsV2 on the message.
 //
 // NOTE: Components V2 messages cannot use `content` or `embeds`. All layout
 // lives inside ContainerBuilder components.
@@ -177,40 +166,30 @@ export function buildDeliveryTicketEmbed(contract, discordUserId) {
       new TextDisplayBuilder().setContent(`### 🗃️ Items to Load (${contract.items.length})`),
     );
 
-    const itemsToShow = contract.items.slice(0, MAX_SECTION_ITEMS);
+    const sortedItems = [...contract.items].sort((a, b) => b.allocated - a.allocated);
+    const itemsToShow = sortedItems.slice(0, MAX_SECTION_ITEMS);
 
-    for (const item of itemsToShow) {
-      const name     = item.item_name || `Item #${item.item_id}`;
-      const qty      = String(item.allocated).padStart(3);
-      const imageUrl = itemImageUrl(item.image);
+    const itemListText = itemsToShow
+      .map(item => {
+        const name = item.item_name || `Item #${item.item_id}`;
+        const qty  = String(item.allocated).padStart(3);
+        return `\`${qty}\` × **${name}**`;
+      })
+      .join('\n');
 
-      const section = new SectionBuilder()
-        .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(`\`${qty}\` × **${name}**`),
-        );
-
-      if (imageUrl) {
-        section.setThumbnailAccessory(
-          new ThumbnailBuilder()
-            .setURL(imageUrl)
-            .setDescription(name),
-        );
-      }
-
-      container.addSectionComponents(section);
-    }
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(itemListText),
+    );
 
     // Show remaining items as compact text to avoid hitting the 40-component limit
-    const overflowCount = contract.items.length - MAX_SECTION_ITEMS;
+    const overflowCount = sortedItems.length - MAX_SECTION_ITEMS;
     if (overflowCount > 0) {
-      const overflowItems = contract.items.slice(MAX_SECTION_ITEMS);
+      const overflowItems = sortedItems.slice(MAX_SECTION_ITEMS);
       const overflowText = overflowItems
         .map(i => `\`${String(i.allocated).padStart(3)}\` × **${i.item_name || `Item #${i.item_id}`}**`)
         .join('\n');
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `### … and ${overflowCount} more item type${overflowCount > 1 ? 's' : ''}\n${overflowText}`
-        ),
+        new TextDisplayBuilder().setContent(overflowText),
       );
     }
   } else if (Object.keys(contract.allocation ?? {}).length > 0) {
