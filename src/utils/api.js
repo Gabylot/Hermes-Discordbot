@@ -90,3 +90,9 @@ export async function getCities() {
   const { data } = await api.get('/bot/cities');
   return data;
 }
+// ── Storages ─────────────────────────────────────────────────────────────────
+
+export async function getAllStorages() {
+  const { data } = await api.get('/storages');
+  return data; // [{ name, hex, city, code, isBunker, last_updated }]
+}

@@ -6,6 +6,7 @@ Discord bot for managing production, MPF, facility, and delivery tickets. Integr
 
 ### Ticket Management
 - **Claim Tickets** — Crew members claim production/MPF/facility tickets from designated channels
+- **`/tickets` Command** — Pick a category, choose an open ticket, and claim it (auto-creates a private thread)
 - **Done Tickets** — Mark tickets as completed in threaded conversations
 - **Cancel Tickets** — Cancel tickets that are no longer needed
 - **Auto-threading** — Each claimed ticket gets its own Discord thread for focused discussion
@@ -19,6 +20,7 @@ Discord bot for managing production, MPF, facility, and delivery tickets. Integr
 ### Embeds & Messages
 - Rich Discord embeds for all ticket and delivery states (open, claimed, completed, cancelled)
 - Leaderboard embeds to track crew performance
+- **`/highscore` Command** — Show the leaderboard on demand (top players by score, deliveries, and tickets)
 - Ticket poster utility to sync tickets from the Hermes backend into Discord channels
 
 ## Architecture

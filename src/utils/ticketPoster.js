@@ -1,5 +1,6 @@
 import { getOpenTickets, getLeaderboard, setTicketMessage } from './api.js';
 import { buildProductionEmbed, buildLeaderboardEmbed, buildDeliveryRequestEmbed } from '../embeds/index.js';
+import { resolveLeaderboardDisplayNames } from './leaderboard.js';
 
 const CHANNEL_MAP = {
   mpf:                  process.env.CHANNEL_MPF,
@@ -189,21 +190,7 @@ export async function syncLeaderboard(client) {
   // Resolve Discord display names for each player
   const players = await getLeaderboard();
 
-  for (const player of players) {
-    try {
-      // Try guild member first (shows server nickname), fall back to global user
-      const member = await channel.guild.members.fetch(player.discord_user_id).catch(() => null);
-      if (member) {
-        player.displayName = member.displayName || member.user.username;
-      } else {
-        const user = await client.users.fetch(player.discord_user_id).catch(() => null);
-        player.displayName = user ? user.username : `User ${player.discord_user_id}`;
-      }
-    } catch {
-      player.displayName = `User ${player.discord_user_id}`;
-    }
-    console.log(`[leaderboard] resolved ${player.discord_user_id} → ${player.displayName}`);
-  }
+  await resolveLeaderboardDisplayNames(client, players);
 
   const payload = buildLeaderboardEmbed(players);
 

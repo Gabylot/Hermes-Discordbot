@@ -260,3 +260,78 @@ export function buildLeaderboardEmbed(players) {
 
   return { embeds: [embed] };
 }
+// ── Storages Embed ──────────────────────────────────────────────────────────
+
+const MAX_EMBED_FIELDS = 25;
+
+export function buildStoragesEmbeds(storages) {
+  const embeds = [];
+
+  if (!storages?.length) {
+    embeds.push(
+      new EmbedBuilder()
+        .setTitle('🏭 Storages')
+        .setDescription('No storages found.')
+        .setColor(0x95a5a6)
+        .setTimestamp(),
+    );
+    return embeds;
+  }
+
+  // Group storages by city
+  const byCity = new Map();
+  for (const s of storages) {
+    const city = s.city || 'N/A';
+    if (!byCity.has(city)) byCity.set(city, []);
+    byCity.get(city).push(s);
+  }
+
+  // Sort cities alphabetically, and storages within each city by name
+  const cities = [...byCity.keys()].sort((a, b) => a.localeCompare(b));
+  for (const list of byCity.values()) {
+    list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }
+
+  let currentEmbed = null;
+  let fieldCount = 0;
+
+  const pushField = (name, value) => {
+    // Start a new embed when none exists or the 25-field limit is reached
+    if (!currentEmbed || fieldCount >= MAX_EMBED_FIELDS) {
+      currentEmbed = new EmbedBuilder()
+        .setTitle('🏭 Storages')
+        .setColor(0x3498db)
+        .setTimestamp()
+        .setFooter({ text: `Total: ${storages.length} storages` });
+      embeds.push(currentEmbed);
+      fieldCount = 0;
+    }
+    currentEmbed.addFields({ name, value });
+    fieldCount += 1;
+  };
+
+  for (const city of cities) {
+    const lines = byCity
+      .get(city)
+      .map(s => `**${s.name || 'N/A'}** — \`${s.code || 'N/A'}\``);
+
+    // A city with many storages may span multiple fields (1024-char limit each)
+    let start = 0;
+    let part = 1;
+    while (start < lines.length) {
+      let end = start + 1;
+      while (end < lines.length && lines.slice(start, end + 1).join('\n').length < 1024) {
+        end += 1;
+      }
+      const value = lines.slice(start, end).join('\n');
+      pushField(
+        part === 1 ? `🏙 ${city}` : `🏙 ${city} (part ${part})`,
+        value,
+      );
+      part += 1;
+      start = end;
+    }
+  }
+
+  return embeds;
+}
