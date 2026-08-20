@@ -96,3 +96,10 @@ export async function getAllStorages() {
   const { data } = await api.get('/storages');
   return data; // [{ name, hex, city, code, isBunker, last_updated }]
 }
+
+// ── Item search ───────────────────────────────────────────────────────────────
+
+export async function searchItems(term) {
+  const { data } = await api.get('/items/search', { params: { term } });
+  return data; // { items: [{ name, shortname, image, details: [...] }] }
+}

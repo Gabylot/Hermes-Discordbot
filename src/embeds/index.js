@@ -24,6 +24,43 @@ function statusCfg(status) {
   return STATUS_CONFIG[status] ?? { emoji: '⚪', color: 0x95a5a6, label: status ?? 'Unknown' };
 }
 
+// Parse a "d.m.Y H:i" string (as returned by the backend) into a Date.
+function parseBackendDate(str) {
+  if (!str) return null;
+  // "20.08.2026 14:30"
+  const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2})$/.exec(str.trim());
+  if (!m) return null;
+  const [, day, month, year, hour, minute] = m;
+  return new Date(+year, +month - 1, +day, +hour, +minute);
+}
+
+// Relative "3 hours ago" style label from a backend date string.
+function relativeTime(str) {
+  const date = parseBackendDate(str);
+  if (!date) return null;
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return 'just now';
+
+  const secs = Math.floor(diffMs / 1000);
+  if (secs < 60) return 'just now';
+
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins} minute${mins !== 1 ? 's' : ''} ago`;
+
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days !== 1 ? 's' : ''} ago`;
+
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
+
+  const years = Math.floor(months / 12);
+  return `${years} year${years !== 1 ? 's' : ''} ago`;
+}
+
 // ── Production / Ticket Embed ─────────────────────────────────────────────────
 // (stays as a classic embed — no per-item images needed here)
 
@@ -334,4 +371,86 @@ export function buildStoragesEmbeds(storages) {
   }
 
   return embeds;
+}
+
+// ── Item Search Embed ─────────────────────────────────────────────────────────
+// Mirrors the /storages layout: grouped per city, storages sorted within each
+// city, and the quantity shown right next to the storage name.
+
+export function buildSearchEmbed(item) {
+  const embed = new EmbedBuilder()
+    .setTitle(`🔍 ${item.name || 'Item'}`)
+    .setColor(0x3498db)
+    .setTimestamp();
+
+  if (item.image) {
+    embed.setThumbnail(`${IMAGE_BASE}/images/item/${item.image}`);
+  }
+
+  const details = item.details ?? [];
+
+  if (!details.length) {
+    embed.setDescription('No stock found in any storage.');
+    return { embeds: [embed] };
+  }
+
+  // Group storages by city
+  const byCity = new Map();
+  for (const d of details) {
+    const city = d.city || 'N/A';
+    if (!byCity.has(city)) byCity.set(city, []);
+    byCity.get(city).push(d);
+  }
+
+  // Sort cities alphabetically, storages within each city by name
+  const cities = [...byCity.keys()].sort((a, b) => a.localeCompare(b));
+  for (const list of byCity.values()) {
+    list.sort((a, b) => (a.storage_name || '').localeCompare(b.storage_name || ''));
+  }
+
+  let fieldCount = 0;
+
+  const pushField = (name, value) => {
+    if (fieldCount >= MAX_EMBED_FIELDS) return; // don't exceed Discord's field limit
+    embed.addFields({ name, value });
+    fieldCount += 1;
+  };
+
+  for (const city of cities) {
+    const lines = byCity
+      .get(city)
+      .map(d => {
+        const rel = relativeTime(d.last_updated);
+        const time = rel ? ` · *${rel}*` : '';
+        return `**${d.storage_name || 'N/A'}** — ${Number(d.quantity ?? 0).toLocaleString()}${time}`;
+      });
+
+    // A city with many storages may span multiple fields (1024-char limit each)
+    let start = 0;
+    let part = 1;
+    while (start < lines.length && fieldCount < MAX_EMBED_FIELDS) {
+      let end = start + 1;
+      while (end < lines.length && lines.slice(start, end + 1).join('\n').length < 1024) {
+        end += 1;
+      }
+      const value = lines.slice(start, end).join('\n');
+      pushField(
+        part === 1 ? `🏙 ${city}` : `🏙 ${city} (part ${part})`,
+        value,
+      );
+      part += 1;
+      start = end;
+    }
+  }
+
+  const totalLocations = details.length;
+  if (totalLocations > fieldCount) {
+    embed.setFooter({
+      text: `Showing ${fieldCount} of ${totalLocations} storage locations`,
+    });
+  } else {
+    embed.setFooter({ text: `${totalLocations} storage location${totalLocations !== 1 ? 's' : ''}` });
+  }
+
+  return { embeds: [embed] };
 }
