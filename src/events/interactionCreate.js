@@ -47,6 +47,22 @@ export default {
         console.error(`[select] error executing ${baseId}:`, err);
         await replyError(interaction);
       }
+      return;
+    }
+
+    // Handle modal submit interactions
+    if (interaction.isModalSubmit()) {
+      const baseId = interaction.customId.split(':')[0];
+
+      const modal = client.modals.get(baseId);
+      if (!modal) return;
+
+      try {
+        await modal.execute(interaction);
+      } catch (err) {
+        console.error(`[modal] error executing ${baseId}:`, err);
+        await replyError(interaction);
+      }
     }
   },
 };

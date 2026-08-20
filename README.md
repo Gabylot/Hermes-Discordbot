@@ -13,6 +13,7 @@ Discord bot for managing production, MPF, facility, and delivery tickets. Integr
 
 ### Delivery Management
 - **Request Delivery** — Persistent button in the delivery channel to request container deliveries
+- **`/delivery` Command** — Interactive delivery planner: pick a production and a frontline city, enter your container count in a modal, then it opens a private thread with your transport list (done/cancel buttons included)
 - **Structure Selection** — Interactive button-based UI to select which structures need delivery
 - **Done Delivery** — Mark a delivery as completed
 - **Cancel Delivery** — Cancel a delivery request
