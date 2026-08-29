@@ -103,3 +103,16 @@ export async function searchItems(term) {
   const { data } = await api.get('/items/search', { params: { term } });
   return data; // { items: [{ name, shortname, image, details: [...] }] }
 }
+
+// ── AI assistant ─────────────────────────────────────────────────────────────
+
+export async function askAssistant(discordUserId, message, history = []) {
+  // LLM responses can take a while — use a longer timeout than the default.
+  const { data } = await api.post(
+    '/bot/assistant/chat',
+    { discord_user_id: discordUserId, message, history },
+    { timeout: 120000 },
+  );
+  return data; // { reply, remaining_today }
+}
+
