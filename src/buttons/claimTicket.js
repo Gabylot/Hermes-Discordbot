@@ -35,6 +35,10 @@ export default {
       });
       await thread.members.add(userId);
       await thread.send(buildProductionEmbed(ticket));
+      await thread.send(
+        '💡 If you cannot produce one item, you should still produce the others. ' +
+        'Mark the ticket as done after you picked up the items and delivered them to a stockpile.',
+      );
 
       // Delete the system notification message Discord auto-creates
       // when a thread is started from a message — it's noisy and unnecessary.

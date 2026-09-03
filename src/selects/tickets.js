@@ -3,6 +3,7 @@ import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { getOpenTickets, getClaimTicket } from '../utils/api.js';
 import { buildProductionEmbed } from '../embeds/index.js';
@@ -112,8 +113,8 @@ const claimSelect = {
       return;
     }
 
-    // Replace the selector with the claimed ticket and strip its buttons so
-    // the message can't be used to double-claim.
+    // Update the ephemeral picker message with the claim confirmation so the
+    // channel itself stays clean — the ticket details live in the thread.
     const payload = buildProductionEmbed(ticket);
     await interaction.editReply({
       content: `✅ **Ticket #${ticket.ticket_id}** claimed — I opened a thread for you.`,
@@ -141,9 +142,22 @@ const claimSelect = {
       });
       await thread.members.add(userId);
       await thread.send(buildProductionEmbed(ticket));
+      await thread.send(
+        '💡 If you cannot produce one item, you should still produce the others. ' +
+        'Mark the ticket as done after you picked up the items and delivered them to a stockpile.',
+      );
       console.log(`[tickets] ticket #${ticket.ticket_id} claimed by ${userId}, thread: ${thread.id}`);
+
+      // The only public message in the channel: announce the created thread.
+      await interaction.channel.send({
+        content: `🧵 <@${userId}> claimed **Ticket #${ticket.ticket_id}** — thread created: <#${thread.id}>`,
+      });
     } catch (err) {
       console.error(`[tickets] could not create thread for ticket #${ticket.ticket_id}:`, err.message);
+      await interaction.followUp({
+        content: '❌ Ticket claimed, but I could not create the thread. Please contact an admin.',
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => {});
     }
   },
 };

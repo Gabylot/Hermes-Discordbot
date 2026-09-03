@@ -4,6 +4,7 @@ import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  MessageFlags,
 } from 'discord.js';
 
 export const TICKET_CATEGORIES = [
@@ -18,7 +19,8 @@ export default {
     .setName('tickets')
     .setDescription('Pick a category and claim an open ticket'),
   async execute(interaction) {
-    await interaction.deferReply();
+    // Ephemeral: only the invoking user sees the ticket picker — no channel spam.
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const embed = new EmbedBuilder()
       .setTitle('🎫 Ticket Grab')
