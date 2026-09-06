@@ -18,7 +18,8 @@ export default {
     const client   = interaction.client;
 
     try {
-      await completeTicket(ticketId, userId);
+      const result = await completeTicket(ticketId, userId);
+      const points = Number(result?.points ?? 0);
 
       const adminChannel = client.channels.cache.get(process.env.CHANNEL_ADMIN_LOG);
       if (adminChannel) {
@@ -79,6 +80,15 @@ export default {
           }
           console.log(`[done] no queued ticket available for ${type}`);
         }
+      }
+
+      // Announce the completion in the channel the ticket was claimed in
+      // (the thread's parent) before the thread is removed.
+      const parentChannelForAnnounce = interaction.channel.parent;
+      if (parentChannelForAnnounce) {
+        await parentChannelForAnnounce
+          .send(`🏁 <@${userId}> finished **Ticket #${ticketId}** — +${points} Points!`)
+          .catch(err => console.error('[done] could not send completion announcement:', err.message));
       }
 
       // Delete the thread (private threads are ephemeral, OK to remove)
