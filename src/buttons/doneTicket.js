@@ -1,12 +1,4 @@
-import { completeTicket, promoteTicket, setTicketMessage } from '../utils/api.js';
-import { buildProductionEmbed } from '../embeds/index.js';
-
-const CHANNEL_TYPE_MAP = {
-  [process.env.CHANNEL_MPF]:                 'mpf',
-  [process.env.CHANNEL_FACTORY]:             'factory',
-  [process.env.CHANNEL_RESOURCES]:           'resources',
-  [process.env.CHANNEL_VEHICLES_STRUCTURES]: 'vehicles_structures',
-};
+import { completeTicket } from '../utils/api.js';
 
 export default {
   customId: 'done_ticket',
@@ -28,65 +20,11 @@ export default {
         );
       }
 
-      // Find the parent channel type — done button is inside a thread
-      const parentChannel = interaction.channel.parent;
-      const type = CHANNEL_TYPE_MAP[parentChannel?.id];
-
-      if (type && parentChannel) {
-        try {
-          const next = await promoteTicket(type);
-
-          // Look for an existing message for this ticket, or a "No tickets"
-          // placeholder (Ticket #0) to reuse instead of posting a new message
-          const parentMessages = await parentChannel.messages.fetch({ limit: 50 });
-          let targetMsg = parentMessages.find(
-            m => m.author.id === client.user.id &&
-                 m.embeds.length > 0 &&
-                 m.embeds[0]?.footer?.text === `Ticket #${next.ticket_id}`
-          );
-          if (!targetMsg) {
-            // No message for this ticket — try to reuse a placeholder
-            targetMsg = parentMessages.find(
-              m => m.author.id === client.user.id &&
-                   m.embeds.length > 0 &&
-                   m.embeds[0]?.footer?.text === 'Ticket #0'
-            );
-          }
-          if (targetMsg) {
-            await targetMsg.edit(buildProductionEmbed(next));
-            try {
-              await setTicketMessage(next.ticket_id, targetMsg.id);
-            } catch {
-              // Non-critical
-            }
-          } else {
-            const newMsg = await parentChannel.send(buildProductionEmbed(next));
-            try {
-              await setTicketMessage(next.ticket_id, newMsg.id);
-            } catch {
-              // Non-critical
-            }
-          }
-        } catch (err) {
-          // No queued ticket available — find the message and strip its buttons
-          const messages = await parentChannel.messages.fetch({ limit: 50 });
-          const original = messages.find(
-            m => m.author.id === client.user.id &&
-                 m.embeds.length > 0 &&
-                 m.embeds[0]?.footer?.text?.startsWith('Ticket #')
-          );
-          if (original) {
-            await original.edit({ components: [] });
-          }
-          console.log(`[done] no queued ticket available for ${type}`);
-        }
-      }
-
       // Announce the completion in the channel the ticket was claimed in
       // (the thread's parent) before the thread is removed.
-      const parentChannelForAnnounce = interaction.channel.parent;
-      if (parentChannelForAnnounce) {
-        await parentChannelForAnnounce
+      const parentChannel = interaction.channel.parent;
+      if (parentChannel) {
+        await parentChannel
           .send(`🏁 <@${userId}> finished **Ticket #${ticketId}** — +${points} Points!`)
           .catch(err => console.error('[done] could not send completion announcement:', err.message));
       }

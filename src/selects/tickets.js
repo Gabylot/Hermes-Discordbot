@@ -122,7 +122,7 @@ const claimSelect = {
       components: [],
     });
 
-    // Admin log, mirroring the claimTicket button flow.
+    // Admin log, mirroring the claim flow's logging.
     const adminChannel = interaction.client.channels.cache.get(process.env.CHANNEL_ADMIN_LOG);
     if (adminChannel) {
       await adminChannel

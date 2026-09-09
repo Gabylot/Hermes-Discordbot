@@ -101,18 +101,6 @@ export function buildProductionEmbed(ticket) {
 
   const rows = [];
 
-  if (ticket.status === 'open') {
-    rows.push(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`claim_ticket:${ticket.ticket_id}`)
-          .setLabel('Claim Ticket')
-          .setEmoji('🙋')
-          .setStyle(ButtonStyle.Primary),
-      ),
-    );
-  }
-
   if (ticket.status === 'assigned' && ticket.discord_user_id) {
     rows.push(
       new ActionRowBuilder().addComponents(
@@ -131,32 +119,6 @@ export function buildProductionEmbed(ticket) {
   }
 
   return { embeds: [embed], components: rows };
-}
-
-// ── Delivery Request Embed (persistent button in #delivery) ───────────────────
-// (no per-item images — stays as a classic embed)
-
-export function buildDeliveryRequestEmbed() {
-  const embed = new EmbedBuilder()
-    .setTitle('🚛 Request a Delivery')
-    .setDescription(
-      'Need supplies moved to the frontline?\n\n' +
-      'Click **New Delivery** to open a private thread. ' +
-      "You'll be asked how many containers you can carry, " +
-      'and a contract will be generated for you.'
-    )
-    .setColor(0x3498db)
-    .setFooter({ text: 'One contract per request — open a new thread for each run.' });
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('delivery_request')
-      .setLabel('New Delivery')
-      .setEmoji('🚛')
-      .setStyle(ButtonStyle.Primary),
-  );
-
-  return { embeds: [embed], components: [row] };
 }
 
 // ── Delivery Ticket — Components V2 ──────────────────────────────────────────

@@ -1,7 +1,4 @@
 import { REST, Routes } from 'discord.js';
-import { syncTickets, syncLeaderboard, postDeliveryRequestButton } from '../utils/ticketPoster.js';
-
-const TICKET_TYPES = ['mpf', 'factory', 'resources', 'vehicles_structures'];
 
 async function registerCommands(client) {
   const commands = [...client.commands.values()].map(c => c.data.toJSON());
@@ -29,27 +26,6 @@ export default {
       await registerCommands(client);
     } catch (err) {
       console.error(`[commands] failed to register slash commands:`, err.message);
-    }
-
-    // Sync tickets — edits existing messages, posts new ones only when needed
-    for (const type of TICKET_TYPES) {
-      await syncTickets(client, type);
-    }
-
-    // Post delivery request button
-    try {
-      await postDeliveryRequestButton(client);
-      console.log(`[sync] delivery button posted`);
-    } catch (err) {
-      console.error(`[sync] delivery button failed:`, err.message);
-    }
-
-    // Sync leaderboard
-    try {
-      await syncLeaderboard(client);
-      console.log(`[sync] leaderboard posted`);
-    } catch (err) {
-      console.error(`[sync] leaderboard failed:`, err.message);
     }
   },
 };

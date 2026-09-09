@@ -5,14 +5,12 @@ Discord bot for managing production, MPF, facility, and delivery tickets. Integr
 ## Features
 
 ### Ticket Management
-- **Claim Tickets** — Crew members claim production/MPF/facility tickets from designated channels
 - **`/tickets` Command** — Pick a category, choose an open ticket, and claim it (auto-creates a private thread)
 - **Done Tickets** — Mark tickets as completed in threaded conversations
 - **Cancel Tickets** — Cancel tickets that are no longer needed
 - **Auto-threading** — Each claimed ticket gets its own Discord thread for focused discussion
 
 ### Delivery Management
-- **Request Delivery** — Persistent button in the delivery channel to request container deliveries
 - **`/delivery` Command** — Interactive delivery planner: pick a production and a frontline city, enter your container count in a modal, then it opens a private thread with your transport list (done/cancel buttons included)
 - **Structure Selection** — Interactive button-based UI to select which structures need delivery
 - **Done Delivery** — Mark a delivery as completed
@@ -20,9 +18,7 @@ Discord bot for managing production, MPF, facility, and delivery tickets. Integr
 
 ### Embeds & Messages
 - Rich Discord embeds for all ticket and delivery states (open, claimed, completed, cancelled)
-- Leaderboard embeds to track crew performance
 - **`/highscore` Command** — Show the leaderboard on demand (top players by score, deliveries, and tickets)
-- Ticket poster utility to sync tickets from the Hermes backend into Discord channels
 
 ## Architecture
 
@@ -75,12 +71,6 @@ See **[SETUP.md](./SETUP.md)**.
 | `DISCORD_TOKEN` | Bot token from Discord Developer Portal |
 | `DISCORD_CLIENT_ID` | Application ID from Discord Developer Portal |
 | `DISCORD_GUILD_ID` | Discord server ID |
-| `CHANNEL_MPF` | Channel ID for MPF tickets |
-| `CHANNEL_FACTORY` | Channel ID for factory tickets |
-| `CHANNEL_RESOURCES` | Channel ID for resource tickets |
-| `CHANNEL_VEHICLES_STRUCTURES` | Channel ID for vehicles/structures tickets |
-| `CHANNEL_DELIVERY` | Channel ID for delivery requests |
-| `CHANNEL_LEADERBOARD` | Channel ID for leaderboard |
 | `CHANNEL_ADMIN_LOG` | Channel ID for admin logging |
 | `API_BASE_URL` | Hermes backend API URL (e.g., `http://localhost:8000/api`) |
 | `API_SECRET` | Shared secret for API authentication |

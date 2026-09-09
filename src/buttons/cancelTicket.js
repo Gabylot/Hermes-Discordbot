@@ -11,8 +11,8 @@ export default {
     const client   = interaction.client;
 
     try {
-      // Backend re-evaluates priority and returns whichever ticket
-      // should now be shown — may be the cancelled one or a promoted queued one
+      // Backend cancels the ticket and returns whichever ticket should now be
+      // shown — may be the cancelled one or a promoted queued one.
       const shown = await cancelTicket(ticketId, userId);
 
       const adminChannel = client.channels.cache.get(process.env.CHANNEL_ADMIN_LOG);
@@ -22,45 +22,17 @@ export default {
         );
       }
 
-      const embed = buildProductionEmbed(shown);
-
       // The cancel button is in the thread — edit the thread message
+      const embed = buildProductionEmbed(shown);
       await interaction.message.edit(embed);
 
-      // Also update the parent channel so the cancelled ticket gets its
-      // claim button back. Find the specific message by ticket ID in the
-      // embed footer ("Ticket #123"), or post a new one if not found.
+      // Announce the cancellation in the channel the ticket was claimed in
+      // (the thread's parent) before the thread is removed.
       const parentChannel = interaction.channel.parent;
       if (parentChannel) {
-        try {
-          const messages = await parentChannel.messages.fetch({ limit: 50 });
-          const original = messages.find(
-            m => m.author.id === client.user.id &&
-                 m.embeds.length > 0 &&
-                 m.embeds[0]?.footer?.text === `Ticket #${ticketId}`
-          );
-          if (original) {
-            await original.edit(embed);
-            console.log(`[cancel] updated parent message for ticket #${ticketId}`);
-          } else {
-            // Message for this ticket not found — try to reuse a placeholder
-            const placeholder = messages.find(
-              m => m.author.id === client.user.id &&
-                   m.embeds.length > 0 &&
-                   m.embeds[0]?.footer?.text === 'Ticket #0'
-            );
-            if (placeholder) {
-              await placeholder.edit(embed);
-              console.log(`[cancel] reused placeholder for ticket #${shown.ticket_id}`);
-            } else {
-              // No placeholder either — post a new one
-              await parentChannel.send(embed);
-              console.log(`[cancel] posted new message for ticket #${shown.ticket_id} in parent channel`);
-            }
-          }
-        } catch (err) {
-          console.error(`[cancel] failed to update parent channel message:`, err.message);
-        }
+        await parentChannel
+          .send(`❌ <@${userId}> canceled Ticket #${ticketId}`)
+          .catch(err => console.error('[cancel] could not send cancellation announcement:', err.message));
       }
 
       // Delete the thread

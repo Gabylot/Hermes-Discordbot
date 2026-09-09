@@ -49,18 +49,13 @@ DISCORD_TOKEN=paste_your_bot_token
 DISCORD_CLIENT_ID=paste_your_application_id
 DISCORD_GUILD_ID=right_click_server_in_discord_copy_id
 
-CHANNEL_FACTORY=right_click_channel_copy_id
-CHANNEL_MPF=
-CHANNEL_FACILITY=
-CHANNEL_DELIVERY=
-CHANNEL_LEADERBOARD=
 CHANNEL_ADMIN_LOG=
 
 API_BASE_URL=http://localhost:8000/api
 API_SECRET=generate_a_long_random_string_and_add_to_laravel_too
 ```
 
-> **To get channel IDs in Discord:** Enable Developer Mode in Discord settings (Settings → Advanced → Developer Mode), then right-click any channel → Copy ID.
+> **To get the channel ID in Discord:** Enable Developer Mode in Discord settings (Settings → Advanced → Developer Mode), then right-click the channel → Copy ID.
 
 ---
 
@@ -74,9 +69,8 @@ You should see:
 ```
 [events] loaded: ready
 [events] loaded: interactionCreate
-[events] loaded: messageCreate
-[buttons] loaded: claim_ticket
-...
+[buttons] loaded: done_ticket
+[commands] registered N slash command(s)
 [bot] logged in as Veli Bot#1234
 ```
 
@@ -84,34 +78,11 @@ Press `Ctrl+C` to stop after confirming it works.
 
 ---
 
-## 5. Post the delivery request button (one time only)
+## 5. Next steps
 
-```bash
-# Run this once to put the persistent button in #delivery
-node -e "
-import('./src/index.js').then(() => {
-  // wait for ready then call postDeliveryRequestButton
-})
-"
-```
-
-Or easier — add a temporary script `scripts/postDeliveryButton.js`:
-
-```js
-import 'dotenv/config';
-import { Client, GatewayIntentBits } from 'discord.js';
-import { postDeliveryRequestButton } from './src/utils/ticketPoster.js';
-
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-client.once('ready', async () => {
-  await postDeliveryRequestButton(client);
-  console.log('Done!');
-  process.exit(0);
-});
-client.login(process.env.DISCORD_TOKEN);
-```
-
-Run with: `node scripts/postDeliveryButton.js`
+Start the bot with `node src/index.js` (or via PM2, see README). The `/tickets`,
+`/delivery`, and `/highscore` commands are available in any channel the bot can
+see; claimed tickets open private threads with their done/cancel controls.
 
 ---
 
@@ -159,22 +130,17 @@ veli-bot/
 │   ├── index.js                  # entry point
 │   ├── events/
 │   │   ├── ready.js
-│   │   ├── interactionCreate.js  # routes button clicks
-│   │   └── messageCreate.js      # handles container count input in threads
+│   │   └── interactionCreate.js  # routes button clicks
 │   ├── handlers/
 │   │   ├── eventHandler.js
 │   │   ├── buttonHandler.js
 │   │   └── buttons/
-│   │       ├── claimTicket.js
 │   │       ├── doneTicket.js
-│   │       ├── deliveryRequest.js
-│   │       ├── deliveryStructures.js
 │   │       └── doneDelivery.js
 │   ├── embeds/
 │   │   └── index.js              # all Discord embed builders
 │   └── utils/
-│       ├── api.js                # all calls to Laravel backend
-│       └── ticketPoster.js       # helpers to post/sync tickets
+│       └── api.js                # all calls to Laravel backend
 ├── .env
 ├── .env.example
 └── package.json

@@ -1,5 +1,4 @@
 import { completeDelivery } from '../utils/api.js';
-import { syncLeaderboard } from '../utils/ticketPoster.js';
 
 export default {
   customId: 'done_delivery',
@@ -19,13 +18,6 @@ export default {
           `🚛 Delivery #${contractId} completed by <@${userId}> at <t:${Math.floor(Date.now() / 1000)}:f>` +
           (result.score ? ` — **${result.score}** points` : '')
         );
-      }
-
-      // Sync the leaderboard
-      try {
-        await syncLeaderboard(interaction.client);
-      } catch (err) {
-        console.error('[leaderboard] sync after delivery failed:', err.message);
       }
 
       // Delete the delivery message
