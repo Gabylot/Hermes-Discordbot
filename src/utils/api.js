@@ -98,10 +98,13 @@ export async function searchItems(term) {
 
 export async function askAssistant(discordUserId, message, history = []) {
   // LLM responses can take a while — use a longer timeout than the default.
+  // The assistant may run several tool rounds, each a separate slow LLM call,
+  // so this has to cover the whole investigation, not one round. 120s was
+  // regularly exceeded and surfaced as "Could not reach the assistant service".
   const { data } = await api.post(
     '/bot/assistant/chat',
     { discord_user_id: discordUserId, message, history },
-    { timeout: 120000 },
+    { timeout: 480000 },
   );
   return data; // { reply, remaining_today }
 }
