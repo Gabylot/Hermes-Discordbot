@@ -10,19 +10,25 @@ export default {
 
     let production;
     let frontline;
+    let midline;
     try {
       const loaded = await loadCities();
       production = loaded.production;
       frontline = loaded.frontline;
+      midline = loaded.midline;
     } catch (err) {
       console.error('[delivery] failed to fetch cities:', err.message);
       await interaction.editReply('❌ Could not load cities from the backend.');
       return;
     }
 
-    if (!production.length || !frontline.length) {
+    // Frontline and midline cities are both valid destinations, so the
+    // destination menu is their union. Production cities are the source only.
+    const destinations = [...frontline, ...midline];
+
+    if (!production.length || !destinations.length) {
       await interaction.editReply(
-        '❌ No production or frontline cities available right now.',
+        '❌ No production or destination cities available right now.',
       );
       return;
     }
@@ -31,6 +37,8 @@ export default {
       userId: interaction.user.id,
       productionCities: production,
       frontlineCities: frontline,
+      midlineCities: midline,
+      destinationCities: destinations,
       productionCityId: null,
       frontlineCityId: null,
       containers: null,
@@ -39,8 +47,9 @@ export default {
     const embed = new EmbedBuilder()
       .setTitle('🚛 Plan Your Delivery')
       .setDescription(
-        'Pick a **production city** and a **frontline city**, then tell me how many ' +
-        '**containers** you can transport. I\'ll build a transport list for you.',
+        'Pick a **production city** and a **destination** (frontline 🏙️ or midline ⚪), ' +
+        'then tell me how many **containers** you can transport. ' +
+        'I\'ll build a transport list for you.',
       )
       .setColor(0x3498db)
       .setTimestamp();
