@@ -72,6 +72,11 @@ See **[SETUP.md](./SETUP.md)**.
 | `DISCORD_CLIENT_ID` | Application ID from Discord Developer Portal |
 | `DISCORD_GUILD_ID` | Discord server ID |
 | `CHANNEL_ADMIN_LOG` | Channel ID for admin logging |
+| `CHANNEL_VERIFY_ARCHIVE` | Channel ID where finished verification threads are archived |
+| `ROLE_NCO` | Role ID pinged in verification threads |
+| `ROLE_OFFICER` | Role ID pinged in verification threads |
+| `ROLE_VERIFIED` | Role ID that skips verification (both buttons) |
+| `ROLE_ALLIED` | Role ID that skips the ally verification |
 | `API_BASE_URL` | Hermes backend API URL (e.g., `http://localhost:8000/api`) |
 | `API_SECRET` | Shared secret for API authentication |
 

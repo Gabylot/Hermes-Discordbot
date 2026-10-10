@@ -7,9 +7,18 @@ import {
   TextDisplayBuilder,
   SeparatorBuilder,
   MessageFlags,
+  AttachmentBuilder,
 } from 'discord.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { NCO_ROLE_ID, OFFICER_ROLE_ID } from '../utils/recruitThread.js';
 
 const IMAGE_BASE = (process.env.API_BASE_URL || '').replace(/\/api\/?$/, '') || 'https://veli.team';
+
+// Regiment logo shipped with the bot repo — attached to the verification
+// message so the embed never depends on external hosting.
+const LOGO_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'logo1.webp');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -416,3 +425,51 @@ export function buildSearchEmbed(item) {
 
   return { embeds: [embed] };
 }
+
+// ── Verification / Join CWD Embed ─────────────────────────────────────────────
+// Posted with /verification-post. The buttons open the private verification
+// threads handled by src/buttons/joinCwd.js and src/buttons/allyRole.js.
+
+export function buildVerificationEmbed() {
+  const embed = new EmbedBuilder()
+    .setColor(0x2ecc71)
+    .setTitle('👋 Welcome to CWD!')
+    .setDescription(
+      'Want to play with the Colonial War Dogs this war? **Here\'s the drill:**\n\n' +
+      '1️⃣ - Pick one of the two options that suit you!\n' +
+      '2️⃣ - Opening verification with our bot will give you a dedicated private thread, ' +
+      `and <@&${NCO_ROLE_ID}>s/<@&${OFFICER_ROLE_ID}>s will get back to you as soon as possible ` +
+      '(Allies, please drop an F1 screenshot so we may verify you properly.)\n' +
+      '3️⃣ - We shall guide you through the rest as deemed fit! 😊\n\n' +
+      '**Your options:**\n' +
+      '- **Join CWD** - you want to play with CWD as a recruit/returning member.\n' +
+      '- **Get Ally Role** - you\'re playing Colonial with another regiment this war ' +
+      'and want access to the ally channels.\n\n' +
+      `*If anything is unclear, ping an <@&${OFFICER_ROLE_ID}> or <@&${NCO_ROLE_ID}> - we don\'t bite.*\n\n` +
+      '*- CWD Staff*',
+    )
+    .setFooter({ text: 'CWD • Colonial War Dogs' });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('join_cwd')
+      .setLabel('Join CWD')
+      .setEmoji('🎮')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('join_ally')
+      .setLabel('Get Ally Role')
+      .setEmoji('🤝')
+      .setStyle(ButtonStyle.Primary),
+  );
+
+  const payload = { embeds: [embed], components: [row] };
+  try {
+    embed.setThumbnail('attachment://logo1.webp');
+    payload.files = [new AttachmentBuilder(readFileSync(LOGO_PATH), { name: 'logo1.webp' })];
+  } catch {
+    // Logo missing from the repo — send the message without it.
+  }
+  return payload;
+}
+

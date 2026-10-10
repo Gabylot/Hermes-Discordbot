@@ -98,13 +98,24 @@ export async function searchItems(term) {
 
 export async function askAssistant(discordUserId, message, history = []) {
   // LLM responses can take a while — use a longer timeout than the default.
-  // The assistant may run several tool rounds, each a separate slow LLM call,
-  // so this has to cover the whole investigation, not one round. 120s was
-  // regularly exceeded and surfaced as "Could not reach the assistant service".
+  // The assistant may run several tool rounds, each a separate slow LLM call
+  // (measured 100-195s per round), so this has to cover the whole investigation,
+  // not one round.
+  //
+  // The ladder, innermost to outermost:
+  //   Laravel per-call LLM_TIMEOUT  240s  (one upstream LLM call)
+  //   php-fpm request_terminate_timeout 620s
+  //   Apache ProxyTimeout          600s   (veli.team vhost)
+  //   this axios timeout           660s
+  //
+  // This must stay ABOVE Apache's 600s so the server's own 504 is what we
+  // receive, rather than us bailing out first and reporting something that
+  // isn't what actually happened. 660s also keeps us inside the 15-minute
+  // Discord interaction window, since the reply arrives via deferReply.
   const { data } = await api.post(
     '/bot/assistant/chat',
     { discord_user_id: discordUserId, message, history },
-    { timeout: 480000 },
+    { timeout: 660000 },
   );
   return data; // { reply, remaining_today }
 }
