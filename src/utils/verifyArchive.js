@@ -67,8 +67,11 @@ function displayNameOf(message, guild) {
  * Copy a finished verification thread into the archive channel.
  * Returns true when the archive post succeeded — callers should only delete
  * the thread after a successful archive so no history is ever lost.
+ *
+ * `note` is an optional extra header line (e.g. ghost threads closed because
+ * the recruit left the server).
  */
-export async function archiveVerificationThread(thread, closedBy) {
+export async function archiveVerificationThread(thread, closedBy, { note } = {}) {
   try {
     if (!ARCHIVE_CHANNEL_ID) {
       console.error('[archive] CHANNEL_VERIFY_ARCHIVE is not set');
@@ -97,6 +100,7 @@ export async function archiveVerificationThread(thread, closedBy) {
       `**Opened by:** ${clickerText} · <t:${Math.floor(thread.createdTimestamp / 1000)}:F>`,
       `**Closed by:** <@${closedBy.id}> · <t:${Math.floor(Date.now() / 1000)}:F>`,
       `**Messages:** ${messages.length}`,
+      ...(note ? [note] : []),
     ].join('\n');
 
     const transcript = messages.length ? transcriptOf(messages, thread.guild) : '(no messages)';
