@@ -25,16 +25,42 @@ async function collectMessages(thread) {
   return out.reverse();
 }
 
-function transcriptOf(messages) {
+function transcriptOf(messages, guild) {
   return messages
     .map((m) => {
       const time = m.createdAt.toISOString().replace('T', ' ').slice(0, 16);
       let body = m.content || '';
       for (const a of m.attachments.values()) body += (body ? ' ' : '') + `[attachment: ${a.url}]`;
       for (const e of m.embeds) body += (body ? ' ' : '') + `[embed: ${e.title || e.url || 'untitled'}]`;
-      return `[${time}] ${m.author.tag}: ${body}`;
+      return `[${time}] ${displayNameOf(m, guild)}: ${body}`;
     })
     .join('\n');
+}
+
+// Pull every message author we don't have cached yet (one batched REST call),
+// so their server nicknames can be shown in the transcript. Silently tolerant:
+// authors that can't be fetched (e.g. left the guild) use the fallback chain.
+async function ensureMembers(messages, guild) {
+  if (!guild) return;
+  const missing = [
+    ...new Set(messages.map((m) => m.author?.id).filter((id) => id && !guild.members.cache.has(id))),
+  ];
+  if (missing.length === 0) return;
+  try {
+    await guild.members.fetch({ user: missing.slice(0, 100) });
+  } catch (err) {
+    console.warn('[archive] batch member fetch failed, using fallbacks:', err.message);
+  }
+}
+
+// Prefer the author's server nickname in the thread's guild, then their
+// global display name, then the plain username — never the old tag.
+function displayNameOf(message, guild) {
+  const member =
+    message.member ?? (guild && message.author ? guild.members.cache.get(message.author.id) : null);
+  if (member?.displayName) return member.displayName;
+  if (message.author?.globalName) return message.author.globalName;
+  return message.author?.username ?? message.author?.tag ?? 'unknown';
 }
 
 /**
@@ -57,6 +83,7 @@ export async function archiveVerificationThread(thread, closedBy) {
     }
 
     const messages = await collectMessages(thread);
+    await ensureMembers(messages, thread.guild);
     const kind = threadKind(thread.name);
 
     // The opener greets the clicker — their mention in the oldest message.
@@ -72,7 +99,7 @@ export async function archiveVerificationThread(thread, closedBy) {
       `**Messages:** ${messages.length}`,
     ].join('\n');
 
-    const transcript = messages.length ? transcriptOf(messages) : '(no messages)';
+    const transcript = messages.length ? transcriptOf(messages, thread.guild) : '(no messages)';
     const embed = new EmbedBuilder()
       .setTitle(`${kind.label} verification closed`)
       .setDescription(header)

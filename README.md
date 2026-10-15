@@ -73,6 +73,9 @@ See **[SETUP.md](./SETUP.md)**.
 | `DISCORD_GUILD_ID` | Discord server ID |
 | `CHANNEL_ADMIN_LOG` | Channel ID for admin logging |
 | `CHANNEL_VERIFY_ARCHIVE` | Channel ID where finished verification threads are archived |
+| `CHANNEL_ENLISTEES` | Channel ID that receives the welcome message when someone joins |
+| `CHANNEL_WELCOME` | Channel ID linked in the join welcome message |
+| `CHANNEL_VERIFICATION` | Channel ID linked in the join welcome message |
 | `ROLE_NCO` | Role ID pinged in verification threads |
 | `ROLE_OFFICER` | Role ID pinged in verification threads |
 | `ROLE_VERIFIED` | Role ID that skips verification (both buttons) |
