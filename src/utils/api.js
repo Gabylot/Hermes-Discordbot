@@ -120,3 +120,15 @@ export async function askAssistant(discordUserId, message, history = []) {
   return data; // { reply, remaining_today }
 }
 
+// ── Server statistics ──────────────────────────────────────────────────────────
+
+export async function postStatsEvents(events) {
+  const { data } = await api.post('/bot/stats/events', { events });
+  return data; // { inserted }
+}
+
+export async function postStatsVoiceSnapshots(snapshots) {
+  const { data } = await api.post('/bot/stats/voice', { snapshots });
+  return data; // { inserted, duplicates }
+}
+

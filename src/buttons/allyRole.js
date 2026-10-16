@@ -7,6 +7,7 @@ import {
   VERIFIED_ROLE_ID,
   ALLIED_ROLE_ID,
 } from '../utils/recruitThread.js';
+import { trackEvent } from '../utils/stats.js';
 
 export default {
   customId: 'join_ally',
@@ -14,6 +15,10 @@ export default {
     // Verified players and current allies don't need a new verification thread.
     // (Allies CAN still use the Join CWD button - checked only here.)
     if (hasRole(interaction, VERIFIED_ROLE_ID)) {
+      trackEvent('button_join_ally', {
+        userId: interaction.user.id,
+        meta: { outcome: 'already_verified' },
+      });
       await interaction.reply({
         content: '✅ You\'re already verified - no need to verify again. Head into the server and have fun!',
         flags: MessageFlags.Ephemeral,
@@ -21,12 +26,21 @@ export default {
       return;
     }
     if (hasRole(interaction, ALLIED_ROLE_ID)) {
+      trackEvent('button_join_ally', {
+        userId: interaction.user.id,
+        meta: { outcome: 'already_ally' },
+      });
       await interaction.reply({
         content: '🤝 You\'re already an ally - no need to verify again. Your ally access is active.',
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
+
+    trackEvent('button_join_ally', {
+      userId: interaction.user.id,
+      meta: { outcome: 'thread_opened' },
+    });
 
     await openRecruitThread(interaction, {
       prefix: 'ally',

@@ -21,6 +21,14 @@ export default {
     console.log(`[bot] logged in as ${client.user.tag}`);
     client.user.setActivity('CWD Logistics', { type: 3 }); // Watching
 
+    // The join welcome waits for Discord's native join system message — if
+    // that is suppressed, welcomes would silently never fire. Warn loudly.
+    for (const [, guild] of client.guilds.cache) {
+      if (!guild.systemChannel || guild.systemChannelFlags.has('SuppressJoinNotifications')) {
+        console.warn(`[ready] join system messages are disabled in "${guild.name}" — member welcomes will NOT fire`);
+      }
+    }
+
     // Register slash commands
     try {
       await registerCommands(client);

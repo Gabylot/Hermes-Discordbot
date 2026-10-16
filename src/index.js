@@ -6,6 +6,7 @@ import { loadCommands } from './handlers/commandHandler.js';
 import { loadSelectHandlers } from './handlers/selectHandlers.js';
 import { loadModals } from './handlers/modalHandler.js';
 import { shutdown as shutdownRenderer } from './utils/routeImage.js';
+import { initStats } from './utils/stats.js';
 
 const client = new Client({
   intents: [
@@ -13,6 +14,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -27,6 +29,10 @@ await loadButtons(client);
 await loadCommands(client);
 await loadSelectHandlers(client);
 await loadModals(client);
+
+// Activity statistics (joins/leaves/messages/button presses → Hermes, plus
+// periodic voice-channel occupancy snapshots).
+initStats(client);
 
 // The route renderer keeps a headless Chrome alive between requests. Without
 // this, stopping the bot would leave orphaned browser processes behind.
